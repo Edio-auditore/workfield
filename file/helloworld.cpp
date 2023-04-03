@@ -29,13 +29,7 @@ class D : public B, public C{
 };
 int main() {
     // 在标准输出中打印 "Hello, world!"
-    A* p;
-    A a;
-    cout << sizeof(a);
-    B b;
-    cout << sizeof(b);
-    D d;
-    cout << sizeof(d);
+    cout << .6;
     getchar();
 }
 

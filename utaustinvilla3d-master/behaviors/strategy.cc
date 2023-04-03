@@ -1,6 +1,6 @@
 #include "naobehavior.h"
 #include "../rvdraw/rvdraw.h"
-
+#include <algorithm>
 extern int agentBodyType;
 
 /*
@@ -15,6 +15,136 @@ void NaoBehavior::beam( double& beamX, double& beamY, double& beamAngle ) {
 
 
 SkillType NaoBehavior::selectSkill() {
+    VecPosition posBall = worldModel->getBall();
+    VecPosition posGoalkp(-15,posBall.getY()/FIELD_Y*GOAL_Y,0);//守门点位
+    VecPosition midPoint((posBall+posGoalkp).getX()/2.0,(posBall+posGoalkp).getY()/2.0,0);
+
+    VecPosition ballDir = (posBall-posGoalkp).normalize();//球门指向球的方向单位向量
+    VecPosition left90 = VecPosition(0, 0, 1).crossProduct(ballDir)*1.0;
+    VecPosition right90 = -VecPosition(0, 0, 1).crossProduct(ballDir)*1.0;
+
+    VecPosition target[6] = {
+        posBall + VecPosition(-0.5,0,0),//控球位
+        posGoalkp,//守门位
+        posBall + VecPosition(9,4,0),//接应位
+        posBall + VecPosition(9,-4,0),//接应位
+        midPoint + left90*5.0,//防守点
+        midPoint + right90*5.0//防守点
+    };
+
+    for(int i = 0;i<6;i++){
+        if(target[i].getX() >HALF_FIELD_X )
+            target[i].setX(HALF_FIELD_X);
+        if(target[i].getX() <-HALF_FIELD_X )
+            target[i].setX(-HALF_FIELD_X);
+        if(target[i].getY() >HALF_FIELD_Y )
+            target[i].setY(HALF_FIELD_Y);
+        if(target[i].getY() <-HALF_FIELD_Y )
+            target[i].setY(-HALF_FIELD_Y);
+    }
+
+    /*worldModel->getRVSender()->clearStaticDrawings();
+    for(int i = 0; i < 6; i++){
+    int playerNum = WO_TEAMMATE1 + BotForTarget[i];
+    worldModel->getRVSender()->drawPoint(target[i].getX(), target[i].getY(), 10.0f, RVSender::MAGENTA);
+    worldModel->getRVSender()->drawText(to_string(playerNum),target[i].getX(), target[i].getY(), RVSender::MAGENTA);
+    }*/
+    
+    vector<vector<double>>dis(6,vector<double>(6,0));
+    int BotForTarget[6] = {0};
+
+    
+    for(int i = 0;i<6;i++){ //第i个点位target[i] 
+        for(int j = 0;j<6;j++){ //第j名球员
+            VecPosition Pos(0,0,0);
+            int playerNum = WO_TEAMMATE1 + j;
+            WorldObject *tem = worldModel->getWorldObject(playerNum);
+            if (worldModel->getUNum() == playerNum)
+                    Pos = me;
+            else{
+                tem = worldModel->getWorldObject(playerNum);
+                Pos = tem->pos;
+            }
+            dis[i][j]=target[i].getDistanceTo(Pos);
+        }
+    }
+
+    for(int j = 0;j<6;j++){
+        int playerNum = WO_TEAMMATE1 + j;
+        bool isFallen = worldModel->getFallenTeammate( j );//这里有个卡了我巨久的地方，原来getFallenTeammate(0)的值对应的是一号队员的状态，我之前都直接传入playerNum，对着匪夷所思的玩意看了一晚上 (¯﹃¯)
+        if(isFallen)
+        {   
+            cout << playerNum <<"isfallen\n";
+            for(int i = 0;i<6;i++){
+            dis[i][j] += 1.0;
+            }
+        }
+        /*
+        WorldObject *tem = worldModel->getWorldObject(playerNum);
+        bool isvalid = tem->validPosition;
+        if(!isvalid)
+        {
+            cout << playerNum<<"is!valid\n";
+            for(int i = 0;i<6;i++){
+            dis[i][j] = 10000;
+            }
+        }*/
+    }
+
+
+    for(int i = 0;i<6;i++){
+        int robot = min_element(dis[i].begin(), dis[i].begin() + 6) - dis[i].begin();
+        BotForTarget[i] = robot;
+        for(int j = 0;j<6;j++)
+            dis[j][robot]=10000;
+    }
+
+    worldModel->getRVSender()->clearStaticDrawings();
+    for(int i = 0; i < 6; i++){
+    int playerNum = WO_TEAMMATE1 + BotForTarget[i];
+    worldModel->getRVSender()->drawPoint(target[i].getX(), target[i].getY(), 10.0f, RVSender::MAGENTA);
+    worldModel->getRVSender()->drawText(to_string(playerNum),target[i].getX(), target[i].getY(), RVSender::MAGENTA);
+    }
+    
+    //遍历，比较获得除了控球机器人自己以外，最近的队友位置，用于禁区内传球
+    vector<double>disToKicker(6,0);
+    for(int i = 0;i<6;i++){
+        VecPosition Pos(0,0,0);
+        int playerNum = WO_TEAMMATE1 + BotForTarget[i];
+        Pos = worldModel->getWorldObject(playerNum)->pos;
+        disToKicker[i] = posBall.getDistanceTo(Pos);
+    }
+    int iOfClosestTmMate = min_element(disToKicker.begin()+2, disToKicker.begin() + 6) - (disToKicker.begin());//遍历时不考虑自己和守门，防止乌龙
+    VecPosition posClosestTmMate = worldModel->getWorldObject(WO_TEAMMATE1 + BotForTarget[iOfClosestTmMate])->pos;
+
+    for(int i=0;i<6;i++){
+        if (worldModel->getUNum() == WO_TEAMMATE1 + BotForTarget[i]){
+            if(i == 0)//我是踢球的
+            {
+                if(me.getDistanceTo(posBall) > 1)//前往持球点
+                    return goToTarget(collisionAvoidance(true, false, false, 1,0.5, posBall, true));
+                else//我在控球
+                {
+                    if( me.getX()<(PENALTY_X-HALF_FIELD_X) && abs(me.getY())<(PENALTY_Y/2.0))//禁区内
+                        return kickBall(KICK_FORWARD, posClosestTmMate);//踢给最近的队友
+                    else if(posBall.getX() < 9)
+                    {
+                        if(me.getDistanceTo(target[2]) <= me.getDistanceTo(target[3]))
+                            return kickBall(KICK_FORWARD, target[2]);//传给接应点的队友
+                        else
+                            return kickBall(KICK_FORWARD, target[3]);//传给接应点的队友
+                    }
+                    else
+                        return kickBall(KICK_FORWARD, VecPosition(15, 0, 0));
+                }
+            }
+            else//我是去点位的
+            return goToTarget(collisionAvoidance(true, false, false, 1, 0.5,target[i], true));
+        }
+            
+    }
+
+    
     // My position and angle
     //cout << worldModel->getUNum() << ": " << worldModel->getMyPosition() << ",\t" << worldModel->getMyAngDeg() << "\n";
 
