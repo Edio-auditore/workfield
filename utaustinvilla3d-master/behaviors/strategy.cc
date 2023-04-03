@@ -17,7 +17,7 @@ void NaoBehavior::beam( double& beamX, double& beamY, double& beamAngle ) {
 SkillType NaoBehavior::selectSkill() {
     VecPosition posBall = worldModel->getBall();
     VecPosition posGoalkp(-15,posBall.getY()/FIELD_Y*GOAL_Y,0);//守门点位
-    VecPosition midPoint((posBall+posGoalkp).getX()/2.0,(posBall+posGoalkp).getY()/2.0,0);
+    VecPosition midPoint((posBall+posGoalkp).getX()/2.0,(posBall+posGoalkp).getY()/2.0,0);//中点
 
     VecPosition ballDir = (posBall-posGoalkp).normalize();//球门指向球的方向单位向量
     VecPosition left90 = VecPosition(0, 0, 1).crossProduct(ballDir)*1.0;
@@ -32,6 +32,7 @@ SkillType NaoBehavior::selectSkill() {
         midPoint + right90*5.0//防守点
     };
 
+    //防止点位越界
     for(int i = 0;i<6;i++){
         if(target[i].getX() >HALF_FIELD_X )
             target[i].setX(HALF_FIELD_X);
@@ -43,17 +44,10 @@ SkillType NaoBehavior::selectSkill() {
             target[i].setY(-HALF_FIELD_Y);
     }
 
-    /*worldModel->getRVSender()->clearStaticDrawings();
-    for(int i = 0; i < 6; i++){
-    int playerNum = WO_TEAMMATE1 + BotForTarget[i];
-    worldModel->getRVSender()->drawPoint(target[i].getX(), target[i].getY(), 10.0f, RVSender::MAGENTA);
-    worldModel->getRVSender()->drawText(to_string(playerNum),target[i].getX(), target[i].getY(), RVSender::MAGENTA);
-    }*/
-    
     vector<vector<double>>dis(6,vector<double>(6,0));
     int BotForTarget[6] = {0};
 
-    
+
     for(int i = 0;i<6;i++){ //第i个点位target[i] 
         for(int j = 0;j<6;j++){ //第j名球员
             VecPosition Pos(0,0,0);
@@ -71,20 +65,26 @@ SkillType NaoBehavior::selectSkill() {
 
     for(int j = 0;j<6;j++){
         int playerNum = WO_TEAMMATE1 + j;
-        bool isFallen = worldModel->getFallenTeammate( j );//这里有个卡了我巨久的地方，原来getFallenTeammate(0)的值对应的是一号队员的状态，我之前都直接传入playerNum，对着匪夷所思的玩意看了一晚上 (¯﹃¯)
-        if(isFallen)
+        bool isFallen = worldModel->getFallenTeammate( j );//j√ playerNum×
+        if(isFallen) //跌倒花费+1
         {   
-            cout << playerNum <<"isfallen\n";
+           //cout << playerNum <<"isfallen\n";
             for(int i = 0;i<6;i++){
             dis[i][j] += 1.0;
             }
         }
+        VecPosition Pos =  worldModel->getWorldObject(playerNum)->pos; //移出场外的球员不考虑
+        if(abs(Pos.getX())>HALF_FIELD_X && abs(Pos.getY())>HALF_FIELD_Y){
+            for(int i = 0;i<6;i++){
+            dis[i][j] = 10000;
+            }
+        }
         /*
-        WorldObject *tem = worldModel->getWorldObject(playerNum);
+        WorldObject *tem = worldModel->getWorldObject(playerNum); //这个我写不好，用不明白,摆了(；一_一)
         bool isvalid = tem->validPosition;
         if(!isvalid)
         {
-            cout << playerNum<<"is!valid\n";
+            cout << playerNum<<"!valid == true\n";
             for(int i = 0;i<6;i++){
             dis[i][j] = 10000;
             }
