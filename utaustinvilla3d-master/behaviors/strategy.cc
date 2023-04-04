@@ -80,7 +80,7 @@ SkillType NaoBehavior::selectSkill() {
             }
         }
         /*
-        WorldObject *tem = worldModel->getWorldObject(playerNum); //这个我写不好，用不明白,摆了(；一_一)
+        WorldObject *tem = worldModel->getWorldObject(playerNum); //这个我用不明白，写不好,摆了(；一_一)
         bool isvalid = tem->validPosition;
         if(!isvalid)
         {
@@ -92,21 +92,21 @@ SkillType NaoBehavior::selectSkill() {
     }
 
 
-    for(int i = 0;i<6;i++){
+    for(int i = 0;i<6;i++){ //为点位分配机器人
         int robot = min_element(dis[i].begin(), dis[i].begin() + 6) - dis[i].begin();
         BotForTarget[i] = robot;
         for(int j = 0;j<6;j++)
             dis[j][robot]=10000;
     }
 
-    worldModel->getRVSender()->clearStaticDrawings();
+    worldModel->getRVSender()->clearStaticDrawings(); //清屏
     for(int i = 0; i < 6; i++){
     int playerNum = WO_TEAMMATE1 + BotForTarget[i];
-    worldModel->getRVSender()->drawPoint(target[i].getX(), target[i].getY(), 10.0f, RVSender::MAGENTA);
-    worldModel->getRVSender()->drawText(to_string(playerNum),target[i].getX(), target[i].getY(), RVSender::MAGENTA);
+    worldModel->getRVSender()->drawPoint(target[i].getX(), target[i].getY(), 10.0f, RVSender::MAGENTA);  //绘制点位
+    worldModel->getRVSender()->drawText(to_string(playerNum),target[i].getX(), target[i].getY(), RVSender::MAGENTA);  //绘制点位对应球员号数
     }
     
-    //遍历，比较获得除了控球机器人自己以外，最近的队友位置，用于禁区内传球
+    //比较获得除了控球机器人自己以外，最近的队友位置，用于禁区内传球
     vector<double>disToKicker(6,0);
     for(int i = 0;i<6;i++){
         VecPosition Pos(0,0,0);
@@ -114,7 +114,7 @@ SkillType NaoBehavior::selectSkill() {
         Pos = worldModel->getWorldObject(playerNum)->pos;
         disToKicker[i] = posBall.getDistanceTo(Pos);
     }
-    int iOfClosestTmMate = min_element(disToKicker.begin()+2, disToKicker.begin() + 6) - (disToKicker.begin());//遍历时不考虑自己和守门，防止乌龙
+    int iOfClosestTmMate = min_element(disToKicker.begin()+2, disToKicker.begin() + 6) - (disToKicker.begin());//比较距离大小时不考虑自己和守门，不考虑守门是防止乌龙
     VecPosition posClosestTmMate = worldModel->getWorldObject(WO_TEAMMATE1 + BotForTarget[iOfClosestTmMate])->pos;
 
     for(int i=0;i<6;i++){
